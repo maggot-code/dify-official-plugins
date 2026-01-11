@@ -68,7 +68,8 @@ Begin! Reminder to ALWAYS respond with a valid json blob of a single action. Use
 """  # noqa: E501
 
 
-ENGLISH_REACT_CHAT_AGENT_SCRATCHPAD_TEMPLATES = ""
+ENGLISH_REACT_CHAT_AGENT_SCRATCHPAD_TEMPLATES = """Observation: {{observation}}
+Thought:"""
 
 REACT_PROMPT_TEMPLATES = {
     "english": {

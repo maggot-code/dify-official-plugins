@@ -28,8 +28,10 @@ from output_parser.cot_output_parser import ReactChunk, ReactState, CotAgentOutp
 from prompt.template import REACT_PROMPT_TEMPLATES
 from pydantic import BaseModel, Field
 
+
 class LogMetadata:
     """Metadata keys for logging"""
+
     STARTED_AT = "started_at"
     PROVIDER = "provider"
     FINISHED_AT = "finished_at"
@@ -37,6 +39,7 @@ class LogMetadata:
     TOTAL_PRICE = "total_price"
     CURRENCY = "currency"
     TOTAL_TOKENS = "total_tokens"
+
 
 ignore_observation_providers = ["wenxin"]
 
@@ -217,10 +220,13 @@ class ReActAgentStrategy(AgentStrategy):
                     assert isinstance(react_chunk, ReactChunk)
                     chunk_state = react_chunk.state
                     chunk = react_chunk.content
-                    yield self.create_text_message(chunk)
                     if chunk_state == ReactState.ANSWER:
+                        # FinalAnswer should be yielded immediately to user
                         final_answer += chunk
+                        yield self.create_text_message(chunk)
                     elif chunk_state == ReactState.THINKING:
+                        # Collect thought but don't yield yet (delayed display)
+                        # Will be yielded after tool feedback in next round
                         scratchpad.agent_response = scratchpad.agent_response or ""
                         scratchpad.thought = scratchpad.thought or ""
                         scratchpad.agent_response += chunk
@@ -363,7 +369,6 @@ class ReActAgentStrategy(AgentStrategy):
                         scratchpad.observation = tool_invoke_response
                         scratchpad.agent_response = tool_invoke_response
 
-                        # TODO: convert to agent invoke message
                         yield from additional_messages
                         yield self.finish_log_message(
                             log=tool_call_log,
@@ -477,14 +482,8 @@ class ReActAgentStrategy(AgentStrategy):
     def _organize_prompt_messages(
         self, agent_scratchpad: list, query: str
     ) -> list[PromptMessage]:
-        """
-        Organize
-        """
-        # organize system prompt
         system_message = self._system_prompt_message
 
-        # organize current assistant messages
-        agent_scratchpad = agent_scratchpad
         if not agent_scratchpad:
             assistant_messages = []
         else:
@@ -495,17 +494,17 @@ class ReActAgentStrategy(AgentStrategy):
                     assistant_message.content += f"Final Answer: {unit.agent_response}"
                 else:
                     assert isinstance(assistant_message.content, str)
-                    assistant_message.content += f"Thought: {unit.thought}\n\n"
-                    if unit.action_str:
-                        assistant_message.content += f"Action: {unit.action_str}\n\n"
                     if unit.observation:
                         assistant_message.content += (
-                            f"Observation: {unit.observation}\n\n"
+                            f"Observation: {unit.observation}\n"
                         )
+                    if unit.thought:
+                        assistant_message.content += f"Thought: {unit.thought}\n\n"
+                    if unit.action_str:
+                        assistant_message.content += f"Action: {unit.action_str}\n\n"
 
             assistant_messages = [assistant_message]
 
-        # query messages
         query_messages = self._organize_user_query(query, [])
 
         if assistant_messages:
